@@ -1,1 +1,5 @@
-print("hello world")
+import numpy
+import cv2
+
+
+print(16 >> 2)
