@@ -1,5 +1,4 @@
 import numpy
-import tqdm
 import cv2
 
 def generate_pix():

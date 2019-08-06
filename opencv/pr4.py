@@ -1,6 +1,6 @@
 import cv2
 
-src = cv2.imread("lunar.jpg",cv2.IMREAD_COLOR)
+src = cv2.imread("lena.jpg",cv2.IMREAD_COLOR)
 dst= cv2.flip(src,0)
 
 cv2.imshow("src",src)
