@@ -22,19 +22,20 @@ slic_zero = False
 binary_thres = None
 
 
-# image를 불러들여와 lab 영상으로 바꾸어 줍니다.
+# 인자로 받은 image를 lab 형태로 바꾸어 주고, 높이 100을 기준으로 width와 height을 재설정합니다.
 def read_img(img):
     img = cv2.cvtColor(img, cv2.COLOR_RGB2LAB).astype(float) / 255
     h = 100
     w = int(float(h) / float(img.shape[0]) * float(img.shape[1]))
     return cv2.resize(img, (w, h))
 
-
+# skimage에서 제공하는 slic를 이용한 label 받아오기
 def superpixel_label(img):
     return slic(img, segs, compactness, max_iter, sigma, spacing, multichannel, convert2lab, enfoce_connectivity,
                 min_size_factor, max_size_factor, slic_zero)
 
-
+###################################################################
+# 각 superpixel label들의 평균을 구해서 vector vec에 저장하고, return
 def superpixel_mean_vector(img, labels):
     s = sp.amax(labels) + 1
     vec = sp.zeros((s,3)).astype(float)
@@ -84,12 +85,19 @@ def adj_loop(labels):
 
 
 def build_matrix(img, labels):
+    # label들 중 최댓값을 구합니다.
     s = sp.amax(labels) + 1
     vect = superpixel_mean_vector(img, labels)
 
     adj = adj_loop(labels)
 
-    W = sp.spatial.distance.squareform(sp.spatial.distance.pdist(vect))
+    # 거리계산하여 새로운 vector 생성
+    vect2 = []
+    for i in range(len(vect)):
+        for j in range(i + 1, len(vect), 1):
+            vect2.append(((vect[i][0] - vect[j][0]) ** 2 + (vect[i][1] - vect[j][1]) ** 2) ** 0.5)
+
+    W = sp.spatial.distance.squareform(vect2)
 
     W = sp.exp(-1 * W / delta)
     W[adj.astype(np.bool)] = 0
@@ -100,13 +108,18 @@ def build_matrix(img, labels):
 
     return W, D
 
-
 # manifold ranking
 def affinity_matrix(img, labels):
+    # W =
     W, D = build_matrix(img, labels)
     aff = inv(D - (alpha * W))
-    aff[sp.eye(sp.amax(labels) + 1).astype(bool)] = 0.0  # 대각행렬을 0으로 만들어줍니다.
+    # eye는 대각행렬을 만드는 함수임.
+    # 대각행렬인 부분을 모두 0으로 만들어주기 위해 사용됨
+    aff[sp.eye(sp.amax(labels) + 1).astype(bool)] = 0.0
     return aff
+
+##############################################################################
+
 
 def boundary_indictor(labels):
     s = sp.amax(labels) + 1
@@ -172,18 +185,24 @@ def second_stage_indicator(mask, labels):
     indictor[ids] = 1.0
     return indictor
 
+# dot 연산은 행렬곱을 실시
 def MR_saliency(aff, indictor):
     return sp.dot(aff, indictor)
 
 
 def saliency(img):
-    img = read_img(img)
+    # image를 읽어오고, 크기를 재설정합니다.
+    # img = read_img(img)
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2LAB).astype(float) / 255
+
+    # scikit에서 제공하는 superpixel 함수를 사용, label들을 받아옵니다.
     labels = superpixel_label(img)
     aff = affinity_matrix(img, labels)
     first_saliency = first_stage(aff, labels)
     final_saliency = final_stage(first_saliency, labels, aff)
 
     return fill_superpixel_with_saliency(labels, final_saliency)
+
 
 sal = saliency(cv2.imread('ara.jpg'))
 
