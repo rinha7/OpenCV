@@ -3,12 +3,12 @@ import cv2
 
 
 def generate_pixels():
-    indnp = numpy.mgrid[0:height, 0:width].swapaxes(0, 2).swapaxes(0, 1)
+    # iteration 만큼 반복하면서 수행
     for i in range(iterations):
         current_distances = 1 * numpy.ones(image.shape[:2])
         for j in range(SLIC_centers.shape[0]):
-            x_low, x_high = int(SLIC_centers[j][3] - step), int(SLIC_centers[j][3] + step)
-            y_low, y_high = int(SLIC_centers[j][4] - step), int(SLIC_centers[j][4] + step)
+            x_low, x_high = int(SLIC_centers[j][3] - S), int(SLIC_centers[j][3] + S)
+            y_low, y_high = int(SLIC_centers[j][4] - S), int(SLIC_centers[j][4] + S)
 
             if x_low <= 0:
                 x_low = 0
@@ -19,30 +19,45 @@ def generate_pixels():
             if y_high > height:
                 y_high = height
 
-            cropimg = labimg[y_low: y_high, x_low: x_high]
-            color_diff = cropimg - labimg[int(SLIC_centers[j][4]), int(SLIC_centers[j][3])]
-            color_distance = numpy.sqrt(numpy.sum(numpy.square(color_diff), axis=2))
+            crop_img = labimg[y_low: y_high, x_low: x_high]
+            color_diff = crop_img - labimg[int(SLIC_centers[j][4]), int(SLIC_centers[j][3])] # center와 각 픽셀의 차잇값을 담은 배열 생성
+            color_distance = numpy.sqrt(numpy.sum(color_diff**2,axis=2)) # 각 픽셀들의 color_diff에 대한 center와의 거리를 구합니다.
 
             yy, xx = numpy.ogrid[y_low: y_high, x_low: x_high]
             pix_dist = ((yy - SLIC_centers[j][4]) ** 2 + (xx - SLIC_centers[j][3]) ** 2) ** 0.5
 
-            dist = ((color_distance / m) ** 2 + (pix_dist / step) ** 2) ** 0.5
+            dist = ((color_distance / m) ** 2 + (pix_dist / S) ** 2) ** 0.5
+            # dist = color_distance + (m/S)*pix_dist
+
+
+            # if j < SLIC_centers.shape[0]-1:
+            #     x_low2, x_high2 = int(SLIC_centers[j+1][3] - S), int(SLIC_centers[j+1][3] + S)
+            #     y_low2, y_high2 = int(SLIC_centers[j+1][4] - S), int(SLIC_centers[j+1][4] + S)
+            #
+            #     if x_low2 <= 0:
+            #         x_low2 = 0
+            #     if x_high2 > width:
+            #         x_high2 = width
+            #     if y_low2 <= 0:
+            #         y_low2 = 0
+            #     if y_high2 > height:
+            #         y_high2 = height
+            #
+            #     crop_img2 = labimg[y_low2: y_high2, x_low2: x_high2]
+            #     color_diff2 = crop_img2 - labimg[int(SLIC_centers[j+1][4]), int(SLIC_centers[j+1][3])]  # center와 각 픽셀의 차잇값을 담은 배열 생성
+            #     color_distance2 = numpy.sqrt(numpy.sum(color_diff2 ** 2, axis=2))  # 각 픽셀들의 color_diff에 대한 center와의 거리를 구합니다.
+            #
+            #     yy2, xx2 = numpy.ogrid[y_low2: y_high2, x_low2: x_high2]
+            #     pix_dist2 = ((yy2 - SLIC_centers[j+1][4]) ** 2 + (xx2 - SLIC_centers[j+1][3]) ** 2) ** 0.5
+            #
+            #     dist2 = color_distance2 + (m / S) * pix_dist2
+
 
             distance_crop = current_distances[y_low: y_high, x_low: x_high]
             idx = dist < distance_crop
             distance_crop[idx] = dist[idx]
             current_distances[y_low: y_high, x_low: x_high] = distance_crop
             SLIC_clusters[y_low: y_high, x_low: x_high][idx] = j
-
-
-        for k in range(len(SLIC_centers)):
-            idx = (SLIC_clusters == k)
-            color_np = labimg[idx]
-            dist_np = indnp[idx]
-            SLIC_centers[k][0:3] = numpy.sum(color_np, axis=0)
-            sum_y, sum_x = numpy.sum(dist_np, axis=0)
-            SLIC_centers[k][3:] = sum_x, sum_y
-            SLIC_centers[k] /= numpy.sum(idx)
 
 def create_connectivity():
     label = 0
@@ -107,7 +122,12 @@ def display_contours(color):
     for i in range(len(contours)):
         image[contours[i][0], contours[i][1]] = color
 
+# def compare_distance(center):
 
+
+
+#find local minimu in 3x3 neighborhood
+#center를 기준으로 근처 3x3에서 최소값 탐
 def find_local_minimum(center):
     min_grad = 1
     loc_min = center
@@ -126,22 +146,32 @@ def find_local_minimum(center):
 
 def calculate_centers():
     centers = []
-    for i in range(step, width - int(step / 2), step):
-        for j in range(step, height - int(step / 2), step):
+    for i in range(S, width - int(S / 2), S):
+        for j in range(S, height - int(S / 2), S):
             nc = find_local_minimum(center=(i, j))
             color = labimg[nc[1], nc[0]]
             center = [color[0], color[1], color[2], nc[0], nc[1]]
             centers.append(center)
 
     return centers
+def calculate_center_again():
+    centers = []
+    for i in range(SLIC_centers.shape[0]):
+        nc = find_local_minimum(center=(SLIC_centers[i][3],SLIC_centers[i][4]))
+        color = labimg[nc[1], nc[0]]
+        center = [color[0], color[1], color[2], nc[0], nc[1]]
+        centers.append(center)
+
+    return centers
 
 
-# global variables
 image = cv2.imread('lenacolor.png')
-
-step = int((image.shape[0] * image.shape[1] / 1000) ** 0.5)
+K = 1000
+S = int((image.shape[0] * image.shape[1] / K) ** 0.5)
 m = 40
 iterations = 4
+# mK = 40
+
 height, width = image.shape[:2]
 labimg = cv2.cvtColor(image, cv2.COLOR_BGR2LAB).astype(numpy.float64)
 global_distance = 1 * numpy.ones(image.shape[:2])
@@ -149,10 +179,12 @@ SLIC_clusters = -1 * global_distance
 center_counts = numpy.zeros(len(calculate_centers()))
 SLIC_centers = numpy.array(calculate_centers())
 
-# main
+
 generate_pixels()
 create_connectivity()
-calculate_centers()
+centers = calculate_centers()
+SLIC_centers = numpy.asarray(centers)
+# cetner2 = calculate_center_again()
 display_contours([0.0, 0.0, 0.0])
 cv2.imshow("superpixels", image)
 cv2.waitKey(0)
